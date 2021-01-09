@@ -35,6 +35,7 @@ int main(int argc, char** argv) {
 
     UdpSocket socket(opts.port);
 
+    // Simple pairwise matching.
     while (true) {
         auto [alice_buf, alice_addr] = socket.RecvFrom();
         auto [bob_buf, bob_addr] = socket.RecvFrom();

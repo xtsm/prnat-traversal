@@ -18,31 +18,6 @@ ClientOptions ParseCmdline(int argc, char** argv) {
     return ret;
 }
 
-struct ClientDatagram {
-    bool need_ack;
-    std::vector<uint8_t> payload;
-    
-    std::vector<uint8_t> ToBytes() const {
-        std::vector<uint8_t> ret(payload.size() + 1);
-        if (need_ack) {
-            ret[0] |= 0x1;
-        }
-        std::copy(payload.begin(), payload.end(), ret.begin() + 1);
-        return ret;
-    }
-    
-    static ClientDatagram FromBytes(const std::vector<uint8_t>& data) {
-        if (data.empty() || (data[0] & 0xfe) != 0) {
-            throw std::runtime_error("invalid client datagram");
-        }
-        ClientDatagram ret;
-        ret.need_ack = data[0] & 0x1;
-        ret.payload.resize(data.size() - 1);
-        std::copy(data.begin() + 1, data.end(), ret.payload.begin());
-        return ret;
-    }
-};
-
 int main(int argc, char** argv) {
     ClientOptions opts;
     try {
@@ -55,8 +30,11 @@ int main(int argc, char** argv) {
 
     UdpSocket socket;
 
+    // Send a coupling request to server.
     socket.SendTo({}, opts.server_addr);
 
+    // Receive Bob's address from server.
+    // TODO: add heartbeat because NAT can forget about us while we're waiting.
     IpAddress bob_addr;
     while (true) {
         auto [data, addr] = socket.RecvFrom();
@@ -66,6 +44,7 @@ int main(int argc, char** argv) {
         }
     }
 
+    // Probe Bob's NAT while opening our own to him
     socket.SetRecvTimeout(1);
     bool can_send = false;
     while (!can_send) {
@@ -74,6 +53,8 @@ int main(int argc, char** argv) {
             while (true) {
                 auto [data, addr] = socket.RecvFrom();
                 if (addr == bob_addr) {
+                    // Non-empty message means Bob has received one of our probes
+                    // and decided to send useful data so we should process it.
                     std::cout.write(reinterpret_cast<char*>(data.data()), data.size());
                     can_send = true;
                     break;
@@ -82,8 +63,11 @@ int main(int argc, char** argv) {
         } catch (const SocketTimeoutException& e) {
         }
     }
+
+    // Now that we know that Bob's NAT lets out data through, we can send useful stuff.
+    // TODO: replace this with netcat-like behavior.
     socket.SetRecvTimeout(0);
-    
+
     std::thread recv_thread([&socket, bob_addr]() {
         while (true) {
             auto [data, addr] = socket.RecvFrom();
@@ -92,7 +76,6 @@ int main(int argc, char** argv) {
             }
         }
     });
-    
     std::thread send_thread([&socket, bob_addr]() {
         while (true) {
             socket.SendTo({'H', 'e', 'l', 'l', 'o', '\n'}, bob_addr);
