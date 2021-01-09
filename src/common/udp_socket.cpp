@@ -35,6 +35,9 @@ std::vector<uint8_t> UdpSocket::Recv() const {
     std::vector<uint8_t> buf(size_limit);
     ssize_t data_size = recv(sockfd, buf.data(), buf.size(), 0);
     if (data_size < 0) {
+        if (errno == EAGAIN) {
+            throw SocketTimeoutException();
+        }
         throw std::runtime_error(std::strerror(errno));
     }
     buf.resize(data_size);
@@ -48,6 +51,9 @@ std::pair<std::vector<uint8_t>, IpAddress> UdpSocket::RecvFrom() const {
     ssize_t data_size = recvfrom(sockfd, buf.data(), buf.size(), 0,
             reinterpret_cast<sockaddr*>(&sin), &sin_len);
     if (data_size < 0) {
+        if (errno == EAGAIN) {
+            throw SocketTimeoutException();
+        }
         throw std::runtime_error(std::strerror(errno));
     }
     buf.resize(data_size);
