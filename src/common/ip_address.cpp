@@ -1,5 +1,6 @@
 #include "ip_address.h"
 #include <regex>
+#include <sstream>
 
 IpAddress IpAddress::FromString(const std::string& s) {
     static const auto regex = std::regex(R"~((\d+)\.(\d+)\.(\d+)\.(\d+):(\d+))~");
